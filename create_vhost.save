@@ -1,0 +1,27 @@
+#!/bin/bash
+
+#retrieve the server name from the cli parameter
+if [ $# -ne 1 ]; then
+	echo "Missing parameters"
+	exit -1
+fi
+
+#simple parsing of the URL
+echo $1 | grep '.resilientnet.com' > /dev/null
+if [ $? -ne 0 ]; then
+	echo "Malfromed site name, .resilientnet.com is not found"
+	exit -1
+fi
+
+#scan config file to retrieve possibile duplcated names
+ls /etc/nginx/sites_enabled/{$1}.conf 2> /dev/null
+if [ $? -eq 0 ]; then
+	echo "Duplicated site name. Try with a new one"
+	exit -1;
+fi
+
+echo "site name is working and usable..."
+echo "generating vHost"
+
+#create a new directory
+mkdir /var/wwwif [ $? -eq 0 ]; th/

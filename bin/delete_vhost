@@ -1,0 +1,38 @@
+#!/bin/bash
+
+#safely deleting a vhost by creating a backup
+
+#retrieve the server name from the cli parameter
+if [ $# -ne 1 ]; then
+        echo "Missing parameters"
+        exit -1
+fi
+
+#simple parsing of the URL
+echo $1 | grep '.resilientnet.com' > /dev/null
+if [ $? -ne 0 ]; then
+        echo "Malfromed site name, .resilientnet.com is not found"
+        exit -1
+fi
+
+host=$1
+
+#creating a directory inside /var/www/
+mkdir /var/www/backups
+tar -cf /var/www/backups/$host.tar  /var/www/$host
+if [ $? -ne 0 ]; then
+	echo "Cannot backup website files. Aborting..."
+	exit -1;
+fi
+
+rm -R -f /var/www/$host
+rm -f /etc/nginx/sites-available/$host.conf
+rm -f /etc/nginx/sites-enabled/$host.conf
+rm -f /etc/nginx/conf.d/$host.conf
+rm -f /etc/nginx/.$site.pass
+nginx -t
+if [ $? -ne 0 ]; then
+	echo "Nginx configuration is not working"
+	exit -1;
+fi
+nginx -s reload

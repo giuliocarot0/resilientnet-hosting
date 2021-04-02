@@ -1,0 +1,91 @@
+#!/bin/bash
+
+#retrieve the server name from the cli parameter
+if [ $# -ne 3 ]; then
+	echo "Missing parameters"
+	exit -1
+fi
+
+#simple parsing of the URL
+echo $1 | grep '.resilientnet.com' > /dev/null
+if [ $? -ne 0 ]; then
+	echo "Malfromed site name, .resilientnet.com is not found"
+	exit -1
+fi
+issuer=$2
+echo $3 > ../tmp/passwd${1}
+
+#scan config file to retrieve possibile duplcated names
+ls /etc/nginx/sites_enabled/{$1}.conf 2> /dev/null
+if [ $? -eq 0 ]; then
+	echo "Duplicated site name. Try with a new one"
+	exit -1;
+fi
+ls /var/www/$1/
+if [ $? -eq 0 ]; then
+        echo "Duplicated site name. Try with a new one"
+        exit -1;
+fi
+site=$1
+echo "site name is working and usable..."
+echo "generating vHost"
+
+##Now look if the issuer is found
+ls /home/$issuer
+if [ $? -ne 0 ]; then
+	#issuer doesn't exist, creating a new local user
+	adduser --gecos "" --disabled-password $issuer
+	mkdir /home/$issuer/www
+fi
+
+ls /home/$issuer/www
+if [ $? -ne 0 ]; then
+	#error
+	echo "Issuer home direcory is not found or accesible"
+	exit -1
+fi
+
+
+#create a default page
+mkdir /home/$issuer/www/$1
+cp ../src/index.html ../tmp/$1.html
+sed1="s/defaultplaceholder/${1}/"
+
+sed -i $sed1 ../tmp/$1.html
+mv ../tmp/$1.html  /home/$issuer/www/$1/index.html
+ln -s /home/$issuer/www/$1 /var/www/$1
+chown -R www-data:www-data /home/$issuer/www/$1
+
+#create nginx config files
+#first of all creates the website vhost
+echo "generating the configuration file"
+sed2="s/defaultplaceholder.resilientnet.com/${site}/"
+cp ../src/default_site ../tmp/$site.conf
+sed -i $sed2 ../tmp/$site.conf
+mv ../tmp/$site.conf /etc/nginx/sites-available
+ln -s /etc/nginx/sites-available/$site.conf /etc/nginx/sites-enabled/$site.conf
+
+#enable WebDAV
+echo "generating webDAV configuration"
+cp ../src/default_dav ../tmp/$site.dav.conf
+sed -i $sed2 ../tmp/$site.dav.conf
+#set root
+echo "root /home/${issuer}/www/${site}; }" >> ../tmp/$site.dav.conf
+mv ../tmp/$site.dav.conf /etc/nginx/conf.d/$site.conf
+
+#generate user
+echo -n "${issuer}:" | sudo tee /etc/nginx/.${site}.pass
+openssl passwd -apr1 -in ../tmp/passwd${site} | tee -a /etc/nginx/.${site}.pass
+rm -f ../tmp/passwd${site}
+
+#reload nginx
+nginx -t
+if [ $? -eq 0 ]; then
+	nginx -s reload
+	exit $?
+fi
+
+#execute rollback
+rm -R -f /var/www/$site
+rm -f /etc/nginx/sites-enabled/$site.conf
+rm -f /etc/nginx/sites-available/$site.conf
